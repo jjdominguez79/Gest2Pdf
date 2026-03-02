@@ -35,6 +35,7 @@ class PdfPageComposer(tk.Tk):
         self.geometry("1150x780")
         self.configure(bg=BG_COLOR)
         self._setup_theme()
+        self._build_menu()
 
         # docs: lista de dicts {path, reader, doc_fitz, page_count, name}
         self.docs = []
@@ -91,6 +92,25 @@ class PdfPageComposer(tk.Tk):
             foreground=[("active", "white")],
         )
 
+    def _build_menu(self):
+        menubar = tk.Menu(self)
+
+        archivo = tk.Menu(menubar, tearoff=0)
+        archivo.add_command(label="Añadir PDFs...", command=self.add_pdfs)
+        archivo.add_command(label="Exportar PDF...", command=self.export_pdf)
+        archivo.add_command(label="Limpiar proyecto", command=self.clear_project)
+        archivo.add_separator()
+        archivo.add_command(label="Salir", command=self.destroy)
+        menubar.add_cascade(label="Archivo", menu=archivo)
+
+        util = tk.Menu(menubar, tearoff=0)
+        util.add_command(label="Unir PDFs (rápido)...", command=self.merge_pdfs_quick)
+        util.add_command(label="Dividir PDF...", command=self.split_pdf)
+        util.add_command(label="Comprimir PDF...", command=self.compress_pdf)
+        menubar.add_cascade(label="Utilidades", menu=util)
+
+        self.config(menu=menubar)
+
     # ---------------- UI ----------------
     def _build_ui(self):
         top = ttk.Frame(self, padding=12, style="Header.TFrame")
@@ -105,24 +125,38 @@ class PdfPageComposer(tk.Tk):
             style="Subtitle.TLabel"
         ).pack(anchor="w", pady=(2, 0))
 
-        controls = ttk.Frame(top, style="Header.TFrame")
-        controls.pack(side=tk.RIGHT)
-
-        ttk.Button(controls, text="Añadir PDFs...", command=self.add_pdfs).pack(side=tk.LEFT, padx=5)
-        ttk.Button(controls, text="Dividir PDF...", command=self.split_pdf).pack(side=tk.LEFT, padx=5)
-        ttk.Button(controls, text="Limpiar proyecto", command=self.clear_project).pack(side=tk.LEFT, padx=5)
-
         ttk.Separator(self, orient=tk.HORIZONTAL).pack(side=tk.TOP, fill=tk.X, padx=12)
+
+        toolbar = ttk.Frame(self, padding=(12, 8), style="Header.TFrame")
+        toolbar.pack(side=tk.TOP, fill=tk.X)
+
+        main_section = ttk.Frame(toolbar, style="Header.TFrame")
+        main_section.pack(side=tk.LEFT, padx=(0, 24))
+        ttk.Label(main_section, text="Documento", style="Muted.TLabel").pack(anchor="w")
+        main_buttons = ttk.Frame(main_section, style="Header.TFrame")
+        main_buttons.pack(anchor="w", pady=(4, 0))
+        ttk.Button(main_buttons, text="Añadir PDFs...", command=self.add_pdfs).pack(side=tk.LEFT, padx=4)
+        ttk.Button(main_buttons, text="Exportar PDF...", command=self.export_pdf, style="Accent.TButton").pack(
+            side=tk.LEFT, padx=4
+        )
+        ttk.Button(main_buttons, text="Limpiar proyecto", command=self.clear_project).pack(side=tk.LEFT, padx=4)
+
+        util_section = ttk.Frame(toolbar, style="Header.TFrame")
+        util_section.pack(side=tk.LEFT)
+        ttk.Label(util_section, text="Utilidades", style="Muted.TLabel").pack(anchor="w")
+        util_buttons = ttk.Frame(util_section, style="Header.TFrame")
+        util_buttons.pack(anchor="w", pady=(4, 0))
+        ttk.Button(util_buttons, text="Unir PDFs (rápido)...", command=self.merge_pdfs_quick).pack(
+            side=tk.LEFT, padx=4
+        )
+        ttk.Button(util_buttons, text="Dividir PDF...", command=self.split_pdf).pack(side=tk.LEFT, padx=4)
+        ttk.Button(util_buttons, text="Comprimir PDF...", command=self.compress_pdf).pack(side=tk.LEFT, padx=4)
 
         action_bar = ttk.Frame(self, padding=(12, 8), style="Header.TFrame")
         action_bar.pack(side=tk.TOP, fill=tk.X)
         ttk.Button(action_bar, text="Seleccionar todo", command=self.select_all).pack(side=tk.LEFT, padx=5)
         ttk.Button(action_bar, text="Limpiar selección", command=self.clear_selection).pack(side=tk.LEFT, padx=5)
         ttk.Button(action_bar, text="Eliminar seleccionadas", command=self.delete_selected).pack(side=tk.LEFT, padx=5)
-        ttk.Separator(action_bar, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=10)
-        ttk.Button(action_bar, text="Exportar PDF...", command=self.export_pdf, style="Accent.TButton").pack(
-            side=tk.LEFT, padx=5
-        )
 
         self.info_var = tk.StringVar(value="Añade uno o varios PDFs para empezar.")
         ttk.Label(self, textvariable=self.info_var, padding=(12, 4), style="Muted.TLabel").pack(
@@ -502,6 +536,99 @@ class PdfPageComposer(tk.Tk):
             return
 
         messagebox.showinfo("OK", f"PDF exportado:\n{out_path}")
+
+    # ---------------- Quick merge ----------------
+    def merge_pdfs_quick(self):
+        paths = filedialog.askopenfilenames(
+            title="Selecciona PDFs para unir",
+            filetypes=[("PDF", "*.pdf")],
+        )
+        if not paths:
+            return
+
+        out_path = filedialog.asksaveasfilename(
+            title="Guardar PDF unido",
+            defaultextension=".pdf",
+            filetypes=[("PDF", "*.pdf")],
+            initialfile="unido.pdf",
+        )
+        if not out_path:
+            return
+
+        try:
+            writer = PdfWriter()
+            total_pages = 0
+            for path in paths:
+                reader = PdfReader(path)
+                for page in reader.pages:
+                    writer.add_page(page)
+                    total_pages += 1
+
+            os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
+            with open(out_path, "wb") as f:
+                writer.write(f)
+
+        except Exception as e:
+            messagebox.showerror("Error", f"No se pudo unir:\n{e}")
+            return
+
+        messagebox.showinfo("OK", f"PDF unido:\n{out_path}\nPáginas: {total_pages}")
+
+    # ---------------- Compress ----------------
+    def compress_pdf(self):
+        path = filedialog.askopenfilename(
+            title="Selecciona el PDF a comprimir",
+            filetypes=[("PDF", "*.pdf")],
+        )
+        if not path:
+            return
+
+        base = os.path.splitext(os.path.basename(path))[0]
+        out_path = filedialog.asksaveasfilename(
+            title="Guardar PDF comprimido",
+            defaultextension=".pdf",
+            filetypes=[("PDF", "*.pdf")],
+            initialfile=f"{base}_comprimido.pdf",
+        )
+        if not out_path:
+            return
+
+        try:
+            before = os.path.getsize(path)
+        except Exception:
+            before = None
+
+        try:
+            doc = fitz.open(path)
+            try:
+                doc.save(
+                    out_path,
+                    garbage=4,
+                    deflate=True,
+                    clean=True,
+                    deflate_images=True,
+                    deflate_fonts=True,
+                )
+            except TypeError:
+                doc.save(out_path, garbage=4, deflate=True, clean=True)
+            doc.close()
+        except Exception as e:
+            messagebox.showerror("Error", f"No se pudo comprimir:\n{e}")
+            return
+
+        try:
+            after = os.path.getsize(out_path)
+        except Exception:
+            after = None
+
+        if before and after:
+            ratio = 100 - int((after / before) * 100)
+            messagebox.showinfo(
+                "OK",
+                f"PDF comprimido:\n{out_path}\nAntes: {before/1024/1024:.2f} MB\nDespués: {after/1024/1024:.2f} MB\nAhorro: {max(ratio, 0)}%",
+            )
+        else:
+            messagebox.showinfo("OK", f"PDF comprimido:\n{out_path}")
 
     # ---------------- Split ----------------
     def split_pdf(self):

@@ -8,6 +8,7 @@ Aplicación sencilla en Tkinter para unir y reordenar páginas de varios PDFs us
 - Reordenamiento por drag & drop directamente sobre la lista.
 - Eliminación rápida de páginas seleccionadas.
 - Exporta un único PDF con el orden actual.
+- Utilidades: unir PDFs (rápido), dividir por rangos y comprimir PDF.
 - Ajustes rápidos en el código: `THUMB_WIDTH`, `RENDER_ZOOM` y `ITEM_PAD` al inicio de `main.py` controlan tamaño de miniaturas y espaciado.
 
 ## Requisitos
@@ -38,6 +39,30 @@ python main.py
    - Arrastra una página para moverla a otra posición.
    - Usa **"Eliminar seleccionadas"** si necesitas quitar páginas.
    - Pulsa **"Exportar PDF..."** para guardar el resultado.
+   - En **Utilidades** encontrarás: **Unir PDFs (rápido)**, **Dividir PDF** y **Comprimir PDF**.
+
+## Crear ejecutable (.exe en Windows)
+1) Activa el entorno virtual (recomendado) e instala PyInstaller:
+
+```bash
+python -m venv .venv
+.venv\Scripts\activate
+pip install --upgrade pip
+pip install pyinstaller
+```
+
+2) Ejecuta PyInstaller desde la raíz del proyecto (recomendado con `python -m`):
+
+```bash
+python -m PyInstaller --onefile --noconsole --name Gest2Pdf main.py
+```
+
+3) El ejecutable quedará en `dist/Gest2Pdf.exe`.
+
+Notas:
+- Si quieres una carpeta con recursos en lugar de un solo archivo, usa `--onedir`.
+- Si ves que faltan dependencias, ejecuta el comando dentro del mismo `venv` donde instalaste `pymupdf`, `Pillow` y `pypdf`.
+- En Windows, usar `python -m PyInstaller` evita errores del launcher cuando `pyinstaller.exe` apunta a un Python que ya no existe.
 
 ## Consejos de rendimiento
 - Para PDFs con cientos de páginas, aumenta `THUMB_WIDTH` o reduce `RENDER_ZOOM` en `main.py` para generar miniaturas más pequeñas y rápidas.
