@@ -10,6 +10,14 @@ from pypdf import PdfReader, PdfWriter
 THUMB_WIDTH = 160
 RENDER_ZOOM = 1.2
 ITEM_PAD = 8
+SPLIT_THUMB_WIDTH = 140
+SPLIT_RENDER_ZOOM = 0.8
+BG_COLOR = "#f4f6f8"
+CARD_COLOR = "#ffffff"
+ACCENT_COLOR = "#1e5b7a"
+ACCENT_DARK = "#17465e"
+TEXT_MUTED = "#5c6773"
+CARD_BORDER = "#e2e7ee"
 
 
 class PdfPageComposer(tk.Tk):
@@ -23,8 +31,10 @@ class PdfPageComposer(tk.Tk):
 
     def __init__(self):
         super().__init__()
-        self.title("PDF Composer (Unir + Reordenar)")
+        self.title("Gest2PDF — Componer, unir y dividir")
         self.geometry("1150x780")
+        self.configure(bg=BG_COLOR)
+        self._setup_theme()
 
         # docs: lista de dicts {path, reader, doc_fitz, page_count, name}
         self.docs = []
@@ -42,42 +52,94 @@ class PdfPageComposer(tk.Tk):
         self.drag_hover = None  # índice destino (hover)
         self._build_ui()
 
+    def _setup_theme(self):
+        style = ttk.Style()
+        try:
+            style.theme_use("clam")
+        except Exception:
+            pass
+
+        style.configure("TFrame", background=BG_COLOR)
+        style.configure("Card.TFrame", background=CARD_COLOR)
+        style.configure("Header.TFrame", background=BG_COLOR)
+        style.configure("Title.TLabel", background=BG_COLOR, foreground=ACCENT_COLOR, font=("Segoe UI Semibold", 17))
+        style.configure("Subtitle.TLabel", background=BG_COLOR, foreground=TEXT_MUTED, font=("Segoe UI", 10))
+        style.configure("TLabel", background=BG_COLOR, foreground="#1b1f24", font=("Segoe UI", 10))
+        style.configure("Muted.TLabel", background=BG_COLOR, foreground=TEXT_MUTED, font=("Segoe UI", 9))
+        style.configure("Card.TLabel", background=CARD_COLOR, foreground="#1b1f24", font=("Segoe UI", 10))
+        style.configure("Item.TFrame", background=CARD_COLOR, relief="solid", borderwidth=1)
+        style.configure("Item.TLabel", background=CARD_COLOR, foreground="#1b1f24", font=("Segoe UI", 10))
+        style.configure("Selected.TFrame", background="#e7f0f5", relief="solid", borderwidth=2)
+        style.configure("Hover.TFrame", background="#f1f4f7", relief="solid", borderwidth=2)
+        style.configure("SplitItem.TFrame", background=CARD_COLOR, relief="solid", borderwidth=1)
+        style.configure("SplitItem.TLabel", background=CARD_COLOR, foreground="#1b1f24", font=("Segoe UI", 9))
+        style.configure("SplitCut.TFrame", background="#e7f0f5", relief="solid", borderwidth=2)
+        style.configure("SplitCut.TLabel", background="#e7f0f5", foreground=ACCENT_DARK, font=("Segoe UI", 9, "bold"))
+        style.configure(
+            "Accent.TButton",
+            background=ACCENT_COLOR,
+            foreground="white",
+            borderwidth=0,
+            focusthickness=1,
+            focuscolor=ACCENT_DARK,
+            padding=(12, 6),
+            font=("Segoe UI Semibold", 10),
+        )
+        style.map(
+            "Accent.TButton",
+            background=[("active", ACCENT_DARK)],
+            foreground=[("active", "white")],
+        )
+
     # ---------------- UI ----------------
     def _build_ui(self):
-        style = ttk.Style()
-        style.configure("Selected.TFrame", relief="solid", borderwidth=2)
-        style.configure("Hover.TFrame", relief="solid", borderwidth=2)
-
-        top = ttk.Frame(self, padding=8)
+        top = ttk.Frame(self, padding=12, style="Header.TFrame")
         top.pack(side=tk.TOP, fill=tk.X)
 
-        ttk.Button(top, text="Añadir PDFs...", command=self.add_pdfs).pack(side=tk.LEFT, padx=5)
-        ttk.Button(top, text="Limpiar proyecto", command=self.clear_project).pack(side=tk.LEFT, padx=5)
+        title_block = ttk.Frame(top, style="Header.TFrame")
+        title_block.pack(side=tk.LEFT, padx=(2, 14))
+        ttk.Label(title_block, text="Gest2PDF", style="Title.TLabel").pack(anchor="w")
+        ttk.Label(
+            title_block,
+            text="Unir, reordenar y dividir PDFs con vista previa",
+            style="Subtitle.TLabel"
+        ).pack(anchor="w", pady=(2, 0))
 
-        ttk.Separator(top, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=10)
+        controls = ttk.Frame(top, style="Header.TFrame")
+        controls.pack(side=tk.RIGHT)
 
-        ttk.Button(top, text="Seleccionar todo", command=self.select_all).pack(side=tk.LEFT, padx=5)
-        ttk.Button(top, text="Limpiar selección", command=self.clear_selection).pack(side=tk.LEFT, padx=5)
-        ttk.Button(top, text="Eliminar seleccionadas", command=self.delete_selected).pack(side=tk.LEFT, padx=5)
+        ttk.Button(controls, text="Añadir PDFs...", command=self.add_pdfs).pack(side=tk.LEFT, padx=5)
+        ttk.Button(controls, text="Dividir PDF...", command=self.split_pdf).pack(side=tk.LEFT, padx=5)
+        ttk.Button(controls, text="Limpiar proyecto", command=self.clear_project).pack(side=tk.LEFT, padx=5)
 
-        ttk.Separator(top, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=10)
+        ttk.Separator(self, orient=tk.HORIZONTAL).pack(side=tk.TOP, fill=tk.X, padx=12)
 
-        ttk.Button(top, text="Exportar PDF...", command=self.export_pdf).pack(side=tk.LEFT, padx=5)
+        action_bar = ttk.Frame(self, padding=(12, 8), style="Header.TFrame")
+        action_bar.pack(side=tk.TOP, fill=tk.X)
+        ttk.Button(action_bar, text="Seleccionar todo", command=self.select_all).pack(side=tk.LEFT, padx=5)
+        ttk.Button(action_bar, text="Limpiar selección", command=self.clear_selection).pack(side=tk.LEFT, padx=5)
+        ttk.Button(action_bar, text="Eliminar seleccionadas", command=self.delete_selected).pack(side=tk.LEFT, padx=5)
+        ttk.Separator(action_bar, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=10)
+        ttk.Button(action_bar, text="Exportar PDF...", command=self.export_pdf, style="Accent.TButton").pack(
+            side=tk.LEFT, padx=5
+        )
 
         self.info_var = tk.StringVar(value="Añade uno o varios PDFs para empezar.")
-        ttk.Label(self, textvariable=self.info_var, padding=(10, 4)).pack(side=tk.TOP, fill=tk.X)
+        ttk.Label(self, textvariable=self.info_var, padding=(12, 4), style="Muted.TLabel").pack(
+            side=tk.TOP, fill=tk.X
+        )
 
         # Paned: lista miniaturas + ayuda
         main = ttk.PanedWindow(self, orient=tk.HORIZONTAL)
         main.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
-        left = ttk.Frame(main)
+        left = ttk.Frame(main, style="Card.TFrame")
         main.add(left, weight=4)
 
-        right = ttk.Frame(main, padding=10)
+        right = ttk.Frame(main, padding=12, style="Card.TFrame")
         main.add(right, weight=1)
 
-        ttk.Label(right, text="Cómo se usa", font=("Segoe UI", 10, "bold")).pack(anchor="w")
+        ttk.Label(right, text="Guía rápida", style="Card.TLabel", font=("Segoe UI", 10, "bold")).pack(anchor="w")
         ttk.Label(
             right,
             text=(
@@ -89,27 +151,34 @@ class PdfPageComposer(tk.Tk):
                 "  donde quieres colocarla.\n\n"
                 "Exportar:\n"
                 "• 'Exportar PDF...' genera el\n"
-                "  PDF unido con el orden actual."
+                "  PDF unido con el orden actual.\n\n"
+                "Dividir:\n"
+                "• 'Dividir PDF...' crea PDFs\n"
+                "  por página o por rangos."
             ),
-            justify=tk.LEFT
+            justify=tk.LEFT,
+            style="Card.TLabel"
         ).pack(anchor="w", pady=(6, 10))
 
-        ttk.Label(right, text="Tip", font=("Segoe UI", 10, "bold")).pack(anchor="w", pady=(10, 0))
+        ttk.Label(right, text="Tip", style="Card.TLabel", font=("Segoe UI", 10, "bold")).pack(
+            anchor="w", pady=(10, 0)
+        )
         ttk.Label(
             right,
             text="Si el PDF tiene cientos de páginas,\nsube THUMB_WIDTH o baja RENDER_ZOOM\npara ir más fluido.",
-            justify=tk.LEFT
+            justify=tk.LEFT,
+            style="Card.TLabel"
         ).pack(anchor="w", pady=(6, 0))
 
         # Canvas scroll vertical
-        self.canvas = tk.Canvas(left, highlightthickness=0)
+        self.canvas = tk.Canvas(left, highlightthickness=0, bg=CARD_COLOR)
         self.canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
         vsb = ttk.Scrollbar(left, orient="vertical", command=self.canvas.yview)
         vsb.pack(side=tk.RIGHT, fill=tk.Y)
         self.canvas.configure(yscrollcommand=vsb.set)
 
-        self.list_container = ttk.Frame(self.canvas)
+        self.list_container = ttk.Frame(self.canvas, style="Card.TFrame")
         self.canvas_window = self.canvas.create_window((0, 0), window=self.list_container, anchor="nw")
 
         self.list_container.bind("<Configure>", self._on_container_configure)
@@ -121,7 +190,9 @@ class PdfPageComposer(tk.Tk):
         self.canvas.bind_all("<Button-5>", self._on_mousewheel_linux)
 
         self.status_var = tk.StringVar(value="Listo.")
-        ttk.Label(self, textvariable=self.status_var, padding=8).pack(side=tk.BOTTOM, fill=tk.X)
+        ttk.Label(self, textvariable=self.status_var, padding=10, style="Muted.TLabel").pack(
+            side=tk.BOTTOM, fill=tk.X
+        )
 
     def _on_container_configure(self, _evt=None):
         self.canvas.configure(scrollregion=self.canvas.bbox("all"))
@@ -216,16 +287,16 @@ class PdfPageComposer(tk.Tk):
         doc_name = self.docs[doc_idx]["name"]
         page_label = f"{doc_name} — pág. {page_idx + 1}"
 
-        frame = ttk.Frame(self.list_container, padding=ITEM_PAD)
+        frame = ttk.Frame(self.list_container, padding=ITEM_PAD, style="Item.TFrame")
         frame.pack(side=tk.TOP, fill=tk.X, padx=8, pady=4)
 
-        inner = ttk.Frame(frame)
+        inner = ttk.Frame(frame, style="Item.TFrame")
         inner.pack(side=tk.TOP, fill=tk.X)
 
         img_label = ttk.Label(inner)
         img_label.pack(side=tk.LEFT)
 
-        text = ttk.Label(inner, text=page_label)
+        text = ttk.Label(inner, text=page_label, style="Item.TLabel")
         text.pack(side=tk.LEFT, padx=12)
 
         # Render miniatura
@@ -259,6 +330,18 @@ class PdfPageComposer(tk.Tk):
         photo = ImageTk.PhotoImage(img)
         self.thumb_cache[key] = photo
         return photo
+
+    def _render_preview_thumbnail(self, doc_fitz, page_idx: int) -> ImageTk.PhotoImage:
+        page = doc_fitz.load_page(page_idx)
+        mat = fitz.Matrix(SPLIT_RENDER_ZOOM, SPLIT_RENDER_ZOOM)
+        pix = page.get_pixmap(matrix=mat, alpha=False)
+        img = Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
+
+        ratio = SPLIT_THUMB_WIDTH / img.width
+        new_size = (SPLIT_THUMB_WIDTH, int(img.height * ratio))
+        img = img.resize(new_size, Image.LANCZOS)
+
+        return ImageTk.PhotoImage(img)
 
     # ---------------- Selection ----------------
     def on_click_item(self, event, index: int):
@@ -332,7 +415,7 @@ class PdfPageComposer(tk.Tk):
             elif i in self.selected:
                 frame.configure(style="Selected.TFrame")
             else:
-                frame.configure(style="TFrame")
+                frame.configure(style="Item.TFrame")
 
     # ---------------- Drag & Drop reorder ----------------
     def on_drag_motion(self, event, index: int):
@@ -419,6 +502,347 @@ class PdfPageComposer(tk.Tk):
             return
 
         messagebox.showinfo("OK", f"PDF exportado:\n{out_path}")
+
+    # ---------------- Split ----------------
+    def split_pdf(self):
+        path = filedialog.askopenfilename(
+            title="Selecciona el PDF a dividir",
+            filetypes=[("PDF", "*.pdf")],
+        )
+        if not path:
+            return
+
+        try:
+            reader = PdfReader(path)
+            total_pages = len(reader.pages)
+        except Exception as e:
+            messagebox.showerror("Error", f"No se pudo abrir el PDF:\n{e}")
+            return
+
+        self._open_split_dialog(path, total_pages)
+
+    def _open_split_dialog(self, path: str, total_pages: int):
+        dialog = tk.Toplevel(self)
+        dialog.title("Dividir PDF")
+        dialog.geometry("920x520")
+        dialog.configure(bg=BG_COLOR)
+        dialog.resizable(False, False)
+        dialog.transient(self)
+        dialog.grab_set()
+
+        container = ttk.Frame(dialog, padding=16, style="Card.TFrame")
+        container.pack(fill=tk.BOTH, expand=True)
+
+        preview_panel = ttk.Frame(container, style="Card.TFrame")
+        preview_panel.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 16))
+
+        controls_panel = ttk.Frame(container, style="Card.TFrame")
+        controls_panel.pack(side=tk.RIGHT, fill=tk.Y)
+
+        base_name = os.path.splitext(os.path.basename(path))[0]
+        default_out = os.path.dirname(path)
+        default_prefix = f"{base_name}_split"
+
+        mode_var = tk.StringVar(value="per_page")
+        range_var = tk.StringVar(value="1-3, 5, 7-9")
+        out_dir_var = tk.StringVar(value=default_out)
+        prefix_var = tk.StringVar(value=default_prefix)
+        cut_count_var = tk.StringVar(value="Cortes: 0")
+
+        ttk.Label(controls_panel, text="Dividir PDF", style="Card.TLabel", font=("Segoe UI Semibold", 12)).pack(
+            anchor="w"
+        )
+        ttk.Label(controls_panel, text=f"Archivo: {os.path.basename(path)}", style="Card.TLabel").pack(anchor="w")
+        ttk.Label(
+            controls_panel,
+            text=f"Páginas totales: {total_pages}",
+            style="Card.TLabel"
+        ).pack(anchor="w", pady=(4, 12))
+
+        options = ttk.Frame(controls_panel, style="Card.TFrame")
+        options.pack(fill=tk.X)
+
+        ttk.Radiobutton(
+            options,
+            text="Dividir por cada página (un PDF por página)",
+            variable=mode_var,
+            value="per_page",
+        ).pack(anchor="w")
+        ttk.Radiobutton(
+            options,
+            text="Dividir por rangos personalizados",
+            variable=mode_var,
+            value="custom",
+        ).pack(anchor="w", pady=(6, 4))
+
+        range_row = ttk.Frame(controls_panel, style="Card.TFrame")
+        range_row.pack(fill=tk.X, pady=(4, 10))
+        ttk.Label(range_row, text="Rangos:", style="Card.TLabel").pack(side=tk.LEFT)
+        range_entry = ttk.Entry(range_row, textvariable=range_var)
+        range_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(8, 0))
+
+        ttk.Label(
+            controls_panel,
+            text="Formato: 1-3,5,7-9 (usa números de página)",
+            style="Card.TLabel"
+        ).pack(anchor="w", pady=(0, 12))
+
+        ttk.Label(
+            controls_panel,
+            text="Si marcas cortes en la vista previa, se usarán esos cortes.",
+            style="Card.TLabel"
+        ).pack(anchor="w", pady=(0, 8))
+
+        cuts_row = ttk.Frame(controls_panel, style="Card.TFrame")
+        cuts_row.pack(fill=tk.X, pady=(0, 8))
+        ttk.Label(cuts_row, textvariable=cut_count_var, style="Card.TLabel").pack(side=tk.LEFT)
+        ttk.Button(cuts_row, text="Limpiar cortes", command=lambda: clear_cuts()).pack(side=tk.RIGHT)
+
+        out_row = ttk.Frame(controls_panel, style="Card.TFrame")
+        out_row.pack(fill=tk.X)
+        ttk.Label(out_row, text="Carpeta salida:", style="Card.TLabel").pack(side=tk.LEFT)
+        out_entry = ttk.Entry(out_row, textvariable=out_dir_var)
+        out_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(8, 6))
+        ttk.Button(
+            out_row,
+            text="Elegir...",
+            command=lambda: self._choose_output_dir(out_dir_var),
+        ).pack(side=tk.LEFT)
+
+        prefix_row = ttk.Frame(controls_panel, style="Card.TFrame")
+        prefix_row.pack(fill=tk.X, pady=(10, 16))
+        ttk.Label(prefix_row, text="Prefijo archivo:", style="Card.TLabel").pack(side=tk.LEFT)
+        ttk.Entry(prefix_row, textvariable=prefix_var).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(8, 0))
+
+        action_row = ttk.Frame(controls_panel, style="Card.TFrame")
+        action_row.pack(side=tk.BOTTOM, fill=tk.X)
+
+        # -------- Preview panel --------
+        preview_header = ttk.Frame(preview_panel, style="Card.TFrame")
+        preview_header.pack(fill=tk.X, pady=(0, 8))
+        ttk.Label(preview_header, text="Vista previa (marca donde cortar)", style="Card.TLabel").pack(anchor="w")
+        ttk.Label(
+            preview_header,
+            text="Clic en una página para cortar después de ella.",
+            style="Card.TLabel"
+        ).pack(anchor="w", pady=(2, 0))
+
+        preview_canvas = tk.Canvas(preview_panel, highlightthickness=0, bg=CARD_COLOR)
+        preview_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        preview_scroll = ttk.Scrollbar(preview_panel, orient="vertical", command=preview_canvas.yview)
+        preview_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        preview_canvas.configure(yscrollcommand=preview_scroll.set)
+
+        preview_container = ttk.Frame(preview_canvas, style="Card.TFrame")
+        preview_window = preview_canvas.create_window((0, 0), window=preview_container, anchor="nw")
+
+        def on_preview_configure(_evt=None):
+            preview_canvas.configure(scrollregion=preview_canvas.bbox("all"))
+
+        def on_preview_canvas_configure(event):
+            preview_canvas.itemconfigure(preview_window, width=event.width)
+
+        preview_container.bind("<Configure>", on_preview_configure)
+        preview_canvas.bind("<Configure>", on_preview_canvas_configure)
+
+        preview_photos = []
+        preview_items = []
+        cut_after = [False] * total_pages
+        doc_fitz = fitz.open(path)
+
+        def update_cut_count():
+            cut_count_var.set(f"Cortes: {sum(1 for c in cut_after if c)}")
+
+        def apply_cut_style(index: int):
+            item = preview_items[index]
+            if cut_after[index]:
+                item["frame"].configure(style="SplitCut.TFrame")
+                item["badge"].configure(text="Corte", style="SplitCut.TLabel")
+                item["badge"].pack(side=tk.RIGHT, padx=6)
+            else:
+                item["frame"].configure(style="SplitItem.TFrame")
+                item["badge"].pack_forget()
+
+        def sync_ranges_from_cuts():
+            ranges = self._ranges_from_cuts(cut_after, total_pages)
+            range_var.set(self._ranges_to_text(ranges))
+            update_cut_count()
+
+        def toggle_cut(index: int):
+            if mode_var.get() != "custom":
+                return
+            cut_after[index] = not cut_after[index]
+            apply_cut_style(index)
+            sync_ranges_from_cuts()
+
+        def clear_cuts():
+            for i in range(total_pages):
+                if cut_after[i]:
+                    cut_after[i] = False
+                    apply_cut_style(i)
+            sync_ranges_from_cuts()
+
+        for i in range(total_pages):
+            frame = ttk.Frame(preview_container, style="SplitItem.TFrame", padding=6)
+            frame.pack(fill=tk.X, padx=6, pady=4)
+
+            inner = ttk.Frame(frame, style="SplitItem.TFrame")
+            inner.pack(fill=tk.X)
+
+            thumb = self._render_preview_thumbnail(doc_fitz, i)
+            preview_photos.append(thumb)
+            img_label = ttk.Label(inner, image=thumb, style="SplitItem.TLabel")
+            img_label.pack(side=tk.LEFT)
+
+            text_label = ttk.Label(inner, text=f"Página {i + 1}", style="SplitItem.TLabel")
+            text_label.pack(side=tk.LEFT, padx=10)
+
+            badge = ttk.Label(inner, style="SplitCut.TLabel")
+
+            preview_items.append({"frame": frame, "badge": badge})
+
+            for w in (frame, inner, img_label, text_label):
+                w.bind("<Button-1>", lambda _e, idx=i: toggle_cut(idx))
+
+        def toggle_range_state(*_):
+            if mode_var.get() == "custom":
+                range_entry.configure(state="normal")
+            else:
+                range_entry.configure(state="disabled")
+
+        mode_var.trace_add("write", toggle_range_state)
+        toggle_range_state()
+        sync_ranges_from_cuts()
+
+        def on_confirm():
+            out_dir = out_dir_var.get().strip()
+            prefix = prefix_var.get().strip()
+            mode = mode_var.get()
+            if not out_dir:
+                messagebox.showwarning("Aviso", "Selecciona una carpeta de salida.")
+                return
+            if not prefix:
+                messagebox.showwarning("Aviso", "Indica un prefijo de archivo.")
+                return
+
+            try:
+                os.makedirs(out_dir, exist_ok=True)
+            except Exception as e:
+                messagebox.showerror("Error", f"No se pudo crear la carpeta:\n{e}")
+                return
+
+            try:
+                if mode == "per_page":
+                    created = self._split_per_page(reader_path=path, out_dir=out_dir, prefix=prefix)
+                else:
+                    if any(cut_after):
+                        ranges = self._ranges_from_cuts(cut_after, total_pages)
+                    else:
+                        ranges = self._parse_ranges(range_var.get(), total_pages)
+                    created = self._split_by_ranges(
+                        reader_path=path,
+                        out_dir=out_dir,
+                        prefix=prefix,
+                        ranges=ranges,
+                    )
+            except Exception as e:
+                messagebox.showerror("Error", f"No se pudo dividir:\n{e}")
+                return
+
+            on_close()
+            messagebox.showinfo("OK", f"PDFs generados: {created}\nCarpeta: {out_dir}")
+
+        def on_close():
+            try:
+                doc_fitz.close()
+            except Exception:
+                pass
+            dialog.destroy()
+
+        ttk.Button(action_row, text="Cancelar", command=on_close).pack(side=tk.RIGHT, padx=6)
+        ttk.Button(action_row, text="Dividir", style="Accent.TButton", command=on_confirm).pack(side=tk.RIGHT)
+
+        dialog.protocol("WM_DELETE_WINDOW", on_close)
+
+    def _choose_output_dir(self, var: tk.StringVar):
+        selected = filedialog.askdirectory(title="Selecciona la carpeta de salida")
+        if selected:
+            var.set(selected)
+
+    def _parse_ranges(self, text: str, max_page: int):
+        ranges = []
+        if not text.strip():
+            raise ValueError("Introduce al menos un rango de páginas.")
+        for part in text.split(","):
+            part = part.strip()
+            if not part:
+                continue
+            if "-" in part:
+                left, right = part.split("-", 1)
+                if not left.strip() or not right.strip():
+                    raise ValueError(f"Rango inválido: '{part}'")
+                start = int(left)
+                end = int(right)
+            else:
+                start = end = int(part)
+
+            if start < 1 or end < 1 or start > max_page or end > max_page or start > end:
+                raise ValueError(f"Rango fuera de límites: '{part}'")
+
+            ranges.append((start, end))
+
+        if not ranges:
+            raise ValueError("Introduce al menos un rango válido.")
+        return ranges
+
+    def _ranges_from_cuts(self, cut_after, total_pages: int):
+        ranges = []
+        start = 1
+        for idx, cut in enumerate(cut_after, start=1):
+            if cut:
+                ranges.append((start, idx))
+                start = idx + 1
+        if start <= total_pages:
+            ranges.append((start, total_pages))
+        return ranges
+
+    def _ranges_to_text(self, ranges):
+        parts = []
+        for start, end in ranges:
+            if start == end:
+                parts.append(str(start))
+            else:
+                parts.append(f"{start}-{end}")
+        return ", ".join(parts)
+
+    def _split_per_page(self, reader_path: str, out_dir: str, prefix: str) -> int:
+        reader = PdfReader(reader_path)
+        total = len(reader.pages)
+        created = 0
+        for i in range(total):
+            writer = PdfWriter()
+            writer.add_page(reader.pages[i])
+            out_name = f"{prefix}_p{(i + 1):03}.pdf"
+            out_path = os.path.join(out_dir, out_name)
+            with open(out_path, "wb") as f:
+                writer.write(f)
+            created += 1
+        return created
+
+    def _split_by_ranges(self, reader_path: str, out_dir: str, prefix: str, ranges) -> int:
+        reader = PdfReader(reader_path)
+        created = 0
+        for start, end in ranges:
+            writer = PdfWriter()
+            for idx in range(start - 1, end):
+                writer.add_page(reader.pages[idx])
+            out_name = f"{prefix}_{start:03}-{end:03}.pdf"
+            out_path = os.path.join(out_dir, out_name)
+            with open(out_path, "wb") as f:
+                writer.write(f)
+            created += 1
+        return created
 
 
 if __name__ == "__main__":
