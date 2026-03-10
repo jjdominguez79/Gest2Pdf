@@ -19,6 +19,41 @@ ACCENT_DARK = "#17465e"
 TEXT_MUTED = "#5c6773"
 CARD_BORDER = "#e2e7ee"
 
+PDF_COMPRESSION_PRESETS = {
+    "low": {
+        "label": "Baja",
+        "description": "Prioriza velocidad de guardado. Reducción de tamaño moderada.",
+        "save_args": {
+            "garbage": 1,
+            "deflate": True,
+            "clean": False,
+        },
+    },
+    "medium": {
+        "label": "Media",
+        "description": "Equilibrio entre tamaño final y tiempo de compresión.",
+        "save_args": {
+            "garbage": 3,
+            "deflate": True,
+            "clean": True,
+            "deflate_images": True,
+            "deflate_fonts": True,
+        },
+    },
+    "high": {
+        "label": "Alta",
+        "description": "Compresión agresiva. Puede tardar más en procesar.",
+        "save_args": {
+            "garbage": 4,
+            "deflate": True,
+            "clean": True,
+            "deflate_images": True,
+            "deflate_fonts": True,
+            "use_objstms": 1,
+        },
+    },
+}
+
 
 class PdfPageComposer(tk.Tk):
     """
@@ -77,6 +112,19 @@ class PdfPageComposer(tk.Tk):
         style.configure("SplitCut.TFrame", background="#e7f0f5", relief="solid", borderwidth=2)
         style.configure("SplitCut.TLabel", background="#e7f0f5", foreground=ACCENT_DARK, font=("Segoe UI", 9, "bold"))
         style.configure(
+            "TButton",
+            background="#ffffff",
+            foreground="#1b1f24",
+            borderwidth=1,
+            padding=(10, 6),
+            font=("Segoe UI", 10),
+        )
+        style.map(
+            "TButton",
+            background=[("active", "#eef2f6"), ("!disabled", "#ffffff")],
+            foreground=[("disabled", "#8f99a5"), ("active", "#1b1f24"), ("!disabled", "#1b1f24")],
+        )
+        style.configure(
             "Accent.TButton",
             background=ACCENT_COLOR,
             foreground="white",
@@ -88,8 +136,8 @@ class PdfPageComposer(tk.Tk):
         )
         style.map(
             "Accent.TButton",
-            background=[("active", ACCENT_DARK)],
-            foreground=[("active", "white")],
+            background=[("active", ACCENT_DARK), ("!disabled", ACCENT_COLOR)],
+            foreground=[("disabled", "#d7dde5"), ("active", "white"), ("!disabled", "white")],
         )
 
     def _build_menu(self):
@@ -583,6 +631,11 @@ class PdfPageComposer(tk.Tk):
         if not path:
             return
 
+        compression_level = self._ask_compression_level(default="medium")
+        if not compression_level:
+            return
+        compression_preset = PDF_COMPRESSION_PRESETS[compression_level]
+
         base = os.path.splitext(os.path.basename(path))[0]
         out_path = filedialog.asksaveasfilename(
             title="Guardar PDF comprimido",
@@ -599,19 +652,7 @@ class PdfPageComposer(tk.Tk):
             before = None
 
         try:
-            doc = fitz.open(path)
-            try:
-                doc.save(
-                    out_path,
-                    garbage=4,
-                    deflate=True,
-                    clean=True,
-                    deflate_images=True,
-                    deflate_fonts=True,
-                )
-            except TypeError:
-                doc.save(out_path, garbage=4, deflate=True, clean=True)
-            doc.close()
+            self._save_compressed_pdf(path, out_path, compression_preset["save_args"])
         except Exception as e:
             messagebox.showerror("Error", f"No se pudo comprimir:\n{e}")
             return
@@ -625,10 +666,90 @@ class PdfPageComposer(tk.Tk):
             ratio = 100 - int((after / before) * 100)
             messagebox.showinfo(
                 "OK",
-                f"PDF comprimido:\n{out_path}\nAntes: {before/1024/1024:.2f} MB\nDespués: {after/1024/1024:.2f} MB\nAhorro: {max(ratio, 0)}%",
+                f"PDF comprimido ({compression_preset['label']}):\n{out_path}\nAntes: {before/1024/1024:.2f} MB\nDespués: {after/1024/1024:.2f} MB\nAhorro: {max(ratio, 0)}%",
             )
         else:
-            messagebox.showinfo("OK", f"PDF comprimido:\n{out_path}")
+            messagebox.showinfo("OK", f"PDF comprimido ({compression_preset['label']}):\n{out_path}")
+
+    def _ask_compression_level(self, default="medium"):
+        dialog = tk.Toplevel(self)
+        dialog.title("Nivel de compresión")
+        dialog.geometry("460x260")
+        dialog.configure(bg=BG_COLOR)
+        dialog.resizable(False, False)
+        dialog.transient(self)
+        dialog.grab_set()
+
+        selected = tk.StringVar(value=default)
+        result = {"value": None}
+
+        container = ttk.Frame(dialog, padding=16, style="Card.TFrame")
+        container.pack(fill=tk.BOTH, expand=True)
+
+        ttk.Label(
+            container,
+            text="Selecciona el nivel de compresión",
+            style="Card.TLabel",
+            font=("Segoe UI Semibold", 11),
+        ).pack(anchor="w")
+        ttk.Label(
+            container,
+            text="Puedes ajustar la relación entre tamaño final y tiempo de proceso.",
+            style="Card.TLabel",
+        ).pack(anchor="w", pady=(2, 10))
+
+        for key, preset in PDF_COMPRESSION_PRESETS.items():
+            row = ttk.Frame(container, style="Card.TFrame")
+            row.pack(fill=tk.X, pady=3)
+            ttk.Radiobutton(row, text=preset["label"], value=key, variable=selected).pack(anchor="w")
+            ttk.Label(row, text=preset["description"], style="Muted.TLabel").pack(anchor="w", padx=(22, 0))
+
+        buttons = ttk.Frame(container, style="Card.TFrame")
+        buttons.pack(fill=tk.X, pady=(14, 0))
+
+        def on_confirm():
+            result["value"] = selected.get()
+            dialog.destroy()
+
+        def on_cancel():
+            dialog.destroy()
+
+        ttk.Button(buttons, text="Cancelar", command=on_cancel).pack(side=tk.RIGHT)
+        ttk.Button(buttons, text="Aceptar", command=on_confirm, style="Accent.TButton").pack(
+            side=tk.RIGHT, padx=(0, 8)
+        )
+
+        dialog.protocol("WM_DELETE_WINDOW", on_cancel)
+        self.wait_window(dialog)
+        return result["value"]
+
+    def _save_compressed_pdf(self, in_path: str, out_path: str, save_args: dict):
+        # Compatibilidad entre versiones de PyMuPDF con distinta firma de save().
+        fallback_drop_order = (
+            "use_objstms",
+            "deflate_images",
+            "deflate_fonts",
+        )
+        kwargs = dict(save_args)
+        doc = fitz.open(in_path)
+        try:
+            while True:
+                try:
+                    doc.save(out_path, **kwargs)
+                    break
+                except TypeError:
+                    if not fallback_drop_order:
+                        raise
+                    removed = False
+                    for key in fallback_drop_order:
+                        if key in kwargs:
+                            kwargs.pop(key, None)
+                            removed = True
+                            break
+                    if not removed:
+                        raise
+        finally:
+            doc.close()
 
     # ---------------- Split ----------------
     def split_pdf(self):

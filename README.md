@@ -9,6 +9,7 @@ Aplicación sencilla en Tkinter para unir y reordenar páginas de varios PDFs us
 - Eliminación rápida de páginas seleccionadas.
 - Exporta un único PDF con el orden actual.
 - Utilidades: unir PDFs (rápido), dividir por rangos y comprimir PDF.
+- Compresión configurable al comprimir PDF: nivel **Baja**, **Media** o **Alta**.
 - Ajustes rápidos en el código: `THUMB_WIDTH`, `RENDER_ZOOM` y `ITEM_PAD` al inicio de `main.py` controlan tamaño de miniaturas y espaciado.
 
 ## Requisitos
